@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alarm System Search</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 16px;
+    background: #f2f2f7;
+    min-height: 100vh;
+  
+  }
+  .container { max-width: 500px; margin: 0 auto; }
+  h1 {
+    font-size: 20px;
+    text-align: center;
+    color: #1c1c1e;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #8e8e93;
+    margin-bottom: 16px;
+  }
+  .upload-box {
+    background: #fff;
+    border: 2px dashed #007aff;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .upload-box:active {
+    background: #e6f0ff;
+    transform: scale(0.98);
+  }
+  .upload-box .icon { font-size: 32px; margin-bottom: 8px; }
+  .upload-box .title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #007aff;
+    margin-bottom: 4px;
+  }
+  .upload-box .hint {
+    font-size: 12px;
+    color: #8e8e93;
+  }
+  .upload-box input[type="file"] { display: none; }
+  .status {
+    text-align: center;
+    font-size: 13px;
+    padding: 8px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .status.success { background: #d4f4dd; color: #1a7f37; }
+  .status.error { background: #ffdadc; color: #c00; }
+  .status.loading { background: #fff3cd; color: #856404; }
+  .search-box { position: relative; margin-bottom: 12px; }
+  input[type="text"] {
+    width: 100%;
+    padding: 14px 44px 14px 16px;
+    font-size: 17px;
+    border: 2px solid #007aff;
+    border-radius: 12px;
+    outline: none;
+    background: #fff;
+    text-transform: uppercase;
+  }
+  input[type="text"]:focus {
+    border-color: #0051d5;
+    box-shadow: 0 0 0 3px rgba(0,122,255,0.2);
+  }
+  .clear-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #8e8e93;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    cursor: pointer;
+    display: none;
+  }
+  .clear-btn.visible { display: block; }
+  .result-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    animation: fadeIn 0.15s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .result-code {
+    font-size: 15px;
+    font-weight: 700;
+    color: #007aff;
+    margin-bottom: 4px;
+  }
+  .result-desc {
+    font-size: 16px;
+    color: #1c1c1e;
+    line-height: 1.4;
+  }
+  .result-desc .highlight {
+    background: #ffeb3b;
+    border-radius: 3px;
+    padding: 0 2px;
+  }
+  .no-result {
+    text-align: center;
+    padding: 32px 16px;
+    color: #8e8e93;
+    font-size: 15px;
+  }
+  .no-result .icon { font-size: 40px; margin-bottom: 8px; }
+  .stats {
+    text-align: center;
+    font-size: 12px;
+    color: #8e8e93;
+    margin-top: 12px;
+  }
+  .badge {
+    display: inline-block;
+    background: #e5e5ea;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #636366;
+    margin-top: 4px;
+  }
+  .sheet-info {
+    font-size: 11px;
+    color: #8e8e93;
+    text-align: center;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔔 Alarm System Search</h1>
+  <p class="subtitle">Upload Excel → វាយកូដ → បង្ហាញលទ្ធផល</p>
+
+  <div class="upload-box" id="uploadBox">
+    <div class="icon">📊</div>
+    <div class="title">Tap ដើម្បី Upload Excel</div>
+    <div class="hint">គាំទ្រ .xlsx, .xls, .csv</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+  </div>
+
+  <div id="status"></div>
+
+  <div class="search-box">
+    <input type="text" id="searchInput"
+           placeholder="ឧ. L1SD01 ឬ l2SD50"
+           autocomplete="off"
+           autocorrect="off"
+           autocapitalize="characters"
+           spellcheck="false"
+           disabled>
+    <button class="clear-btn" id="clearBtn">✕</button>
+  </div>
+
+  <div id="results"></div>
+  <div class="stats" id="stats"></div>
+</div>
+
+<script>
+// ============================================================
+// Variables
+// ============================================================
+let alarmData = {};
+let isLoaded = false;
+
+const uploadBox = document.getElementById('uploadBox');
+const fileInput = document.getElementById('fileInput');
+const statusEl = document.getElementById('status');
+const input = document.getElementById('searchInput');
+const results = document.getElementById('results');
+const stats = document.getElementById('stats');
+const clearBtn = document.getElementById('clearBtn');
+
+// ============================================================
+// Upload Handler
+// ============================================================
+uploadBox.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  handleFile(file);
+});
+
+function showStatus(msg, type) {
+  statusEl.innerHTML = `<div class="status ${type}">${msg}</div>`;
+}
+
+function handleFile(file) {
+  showStatus('⏳ កំពុងអាន file...', 'loading');
+
+  const reader = new FileReader();
+
+  reader.onload = (event) => {
+    try {
+      const data = new Uint8Array(event.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+
+      // យក sheet ទីមួយ (ឬ Sheet3 បើមាន)
+      let sheetName = workbook.SheetNames[0];
+      if (workbook.SheetNames.includes('Sheet3')) {
+        sheetName = 'Sheet3';
+      }
+
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      // បម្លែងទៅ object { code: description }
+      alarmData = {};
+      let count = 0;
+
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        if (!row || row.length < 2) continue;
+
+        const code = String(row[0] || '').trim();
+        const desc = String(row[1] || '').trim();
+
+        // រំលង header row
+        if (code.toLowerCase() === 'code' || code === '') continue;
+        if (code === 'A' || code === 'L1SD01' && desc.includes('Floor(loop1) at office')) {
+          // ទុកឱ្យឆ្លងកាត់ ព្រោះ L1SD01 ជា data ពិត
+        }
+
+        if (code && desc) {
+          alarmData[code] = desc;
+          count++;
+        }
+      }
+
+      if (count === 0) {
+        showStatus('❌ រកមិនឃើញទិន្នន័យក្នុង file', 'error');
+        return;
+      }
+
+      isLoaded = true;
+      input.disabled = false;
+      showStatus(`✅ អានបាន ${count} ជួរ ពី sheet "${sheetName}"`, 'success');
+
+      // Focus input
+      input.focus();
+
+      // Clear old results
+      results.innerHTML = '';
+      stats.textContent = '';
+
+    } catch (err) {
+      console.error(err);
+      showStatus('❌ Error: ' + err.message, 'error');
+    }
+  };
+
+  reader.onerror = () => {
+    showStatus('❌ មិនអាចអាន file', 'error');
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
+// Search Functions
+// ============================================================
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlightMatch(text, query) {
+  if (!query) return escapeHtml(text);
+  const idx = text.toUpperCase().indexOf(query.toUpperCase());
+  if (idx === -1) return escapeHtml(text);
+  return escapeHtml(text.substring(0, idx)) +
+    '<span class="highlight">' + escapeHtml(text.substring(idx, idx + query.length)) + '</span>' +
+    escapeHtml(text.substring(idx + query.length));
+}
+
+function search() {
+  if (!isLoaded) {
+    stats.textContent = 'សូម Upload Excel ជាមុន';
+    return;
+  }
+
+  const query = input.value.trim().toUpperCase();
+  clearBtn.classList.toggle('visible', query.length > 0);
+
+  if (!query) {
+    results.innerHTML = '';
+    stats.textContent = `មាន ${Object.keys(alarmData).length} ជួរ — សូមវាយកូដ`;
+    return;
+  }
+
+  const matches = [];
+  for (const [code, desc] of Object.entries(alarmData)) {
+    if (code.toUpperCase().includes(query) || desc.toUpperCase().includes(query)) {
+      matches.push({ code, desc, matchType: code.toUpperCase().includes(query) ? 'code' : 'desc' });
+    }
+  }
+
+  if (matches.length === 0) {
+    results.innerHTML = '<div class="no-result"><div class="icon">🔍</div>រកមិនឃើញ "<strong>' + escapeHtml(query) + '</strong>"</div>';
+    stats.textContent = '';
+    return;
+  }
+
+  results.innerHTML = matches.map(m => `
+    <div class="result-card">
+      <div class="result-code">${highlightMatch(m.code, query)}</div>
+      <div class="result-desc">${highlightMatch(m.desc, query)}</div>
+      ${m.matchType === 'desc' ? '<span class="badge">match by description</span>' : ''}
+    </div>
+  `).join('');
+
+  stats.textContent = `រកឃើញ ${matches.length} ក្នុងចំណោម ${Object.keys(alarmData).length} ជួរ`;
+}
+
+// ============================================================
+// Event Listeners
+// ============================================================
+let timer;
+input.addEventListener('input', () => {
+  clearTimeout(timer);
+  timer = setTimeout(search, 120);
+});
+
+clearBtn.addEventListener('click', () => {
+  input.value = '';
+  input.focus();
+  search();
+});
+
+// Initial state
+stats.textContent = 'សូម Upload Excel ជាមុន';
+</script>
+</body>
+</html>
